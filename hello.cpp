@@ -8,8 +8,8 @@ static bool quitting = false;
 static SDL_Window *window = NULL;
 static SDL_GLContext gl_context;
 
-GLuint vertexBuffer, vertexArrayObject, vPositionLocation, meshBuffer,
-    shaderProgram;
+GLuint vertexBuffer, vertexArrayObject, vertexPositionAttributeLocation,
+    meshBuffer, shaderProgram, timeUniformLocation;
 GLint positionAttribute, uvAttribute;
 int textures[4];
 GLfloat vertices[] = {-0.5f, -0.5f, 0.0f, 0.5f, -0.5f, 0.0f, 0.0f, 0.5f, 0.0f};
@@ -52,19 +52,23 @@ GLuint createShader(GLuint type, std::string code) {
 }
 
 void loadShaders() {
-  std::string vertexShaderStr =
-      "attribute vec4 vPosition;                   \n"
-      "void main()                                 \n"
-      "{                                           \n"
-      "   gl_Position = vPosition;                 \n"
-      "}                                           \n";
+  std::string vertexShaderStr = "attribute vec4 vertexPosition;\n"
+                                "varying vec4 position;\n"
+                                "void main()\n"
+                                "{\n"
+                                "   gl_Position = vertexPosition;\n"
+                                "   position = vertexPosition;\n"
+                                "}\n";
 
   std::string fragmentShaderStr =
-      "precision mediump float;                            \n"
-      "void main()                                         \n"
-      "{                                                   \n"
-      "  gl_FragColor = vec4( 0.0, 1.0, 0.0, 1.0 );        \n"
-      "}                                                   \n";
+      "precision mediump float;\n"
+      "varying vec4 position;\n"
+      "uniform float time;\n"
+      "void main()\n"
+      "{\n"
+      "  gl_FragColor = vec4(0.4, 0.1, 0.1 + 0.5 * cos(time * 3.1415 * 2.0 + "
+      "position.y * 30.0), 1.0);\n"
+      "}\n";
 
   GLuint vertexShader;
   GLuint fragmentShader;
@@ -89,7 +93,9 @@ void loadShaders() {
     dumpError(shaderProgram);
   }
 
-  vPositionLocation = glGetAttribLocation(shaderProgram, "vPosition");
+  vertexPositionAttributeLocation =
+      glGetAttribLocation(shaderProgram, "vertexPosition");
+  timeUniformLocation = glGetUniformLocation(shaderProgram, "time");
 }
 
 void loadMesh() {
@@ -105,10 +111,17 @@ void loadMesh() {
 void render() {
   SDL_GL_MakeCurrent(window, gl_context);
 
-  glClearColor(255.0f, 0.0f, 0.0f, 1.0f);
+  glClearColor(0.3f, 0.0f, 0.3f, 1.0f);
   glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
   glUseProgram(shaderProgram);
+
+  auto timeSinceEpoch = std::chrono::system_clock::now().time_since_epoch();
+  int millis =
+      std::chrono::duration_cast<std::chrono::milliseconds>(timeSinceEpoch)
+          .count();
+
+  glUniform1f(timeUniformLocation, millis % 100000 / 1000.0);
   glBindVertexArray(vertexArrayObject);
   glDrawArrays(GL_TRIANGLES, 0, sizeof(vertices) / sizeof(GLfloat) / 3);
 
@@ -137,7 +150,7 @@ int main(int argc, char *argv[]) {
 
   // Use a core profile setup.
   window =
-      SDL_CreateWindow("title", SDL_WINDOWPOS_UNDEFINED,
+      SDL_CreateWindow("C++ Emscripten WebGL", SDL_WINDOWPOS_UNDEFINED,
                        SDL_WINDOWPOS_UNDEFINED, 512, 512, SDL_WINDOW_OPENGL);
 
   gl_context = SDL_GL_CreateContext(window);
