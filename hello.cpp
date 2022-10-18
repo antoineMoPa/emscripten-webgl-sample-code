@@ -1,33 +1,105 @@
 #include "SDL.h"
 #include "emscripten.h"
-#include <GLES2/gl2.h>
+#include <GLES3/gl3.h>
 #include <iostream>
+#include <string>
 
 static bool quitting = false;
 static SDL_Window *window = NULL;
 static SDL_GLContext gl_context;
 
-GLuint vertexBuffer, vertexArrayObject, shaderProgram;
+GLuint vertexBuffer, vertexArrayObject, vPositionLocation, meshBuffer,
+    shaderProgram;
 GLint positionAttribute, uvAttribute;
 int textures[4];
+GLfloat vertices[] = {-0.5f, -0.5f, 0.0f, 0.5f, -0.5f, 0.0f, 0.0f, 0.5f, 0.0f};
 
-void loadBufferData() {
-  // vertex position, uv
-  float vertexData[24] = {
-      -0.5, -0.5, 0.0, 1.0, 0.0, 0.0, -0.5, 0.5,  0.0, 1.0, 0.0, 1.0,
-      0.5,  0.5,  0.0, 1.0, 1.0, 1.0, 0.5,  -0.5, 0.0, 1.0, 1.0, 0.0,
-  };
-  glGenBuffers(1, &vertexBuffer);
-  glBindBuffer(GL_ARRAY_BUFFER, vertexBuffer);
-  glBufferData(GL_ARRAY_BUFFER, 32 * sizeof(float), vertexData, GL_STATIC_DRAW);
+void dumpError(GLuint object) {
+  GLint infoLen = 0;
 
-  glEnableVertexAttribArray(positionAttribute);
-  glEnableVertexAttribArray(uvAttribute);
-  int vertexSize = sizeof(float) * 6;
-  glVertexAttribPointer(positionAttribute, 4, GL_FLOAT, GL_FALSE, vertexSize,
-                        (const GLvoid *)0);
-  glVertexAttribPointer(uvAttribute, 2, GL_FLOAT, GL_FALSE, vertexSize,
-                        (const GLvoid *)(sizeof(float) * 4));
+  glGetShaderiv(object, GL_INFO_LOG_LENGTH, &infoLen);
+
+  if (infoLen > 1) {
+    GLchar *infoLog = new char[infoLen];
+
+    glGetShaderInfoLog(object, infoLen, NULL, infoLog);
+    std::cerr << "Error compiling shader:\n%s\n" << infoLog << "\n";
+    delete &infoLog;
+  }
+}
+
+GLuint createShader(GLuint type, std::string code) {
+  GLint compiled;
+  GLuint shader = glCreateShader(type);
+
+  if (shader == 0)
+    return 0;
+
+  const char *shaderStr = code.c_str();
+
+  glShaderSource(shader, 1, &shaderStr, NULL);
+  glCompileShader(shader);
+  glGetShaderiv(shader, GL_COMPILE_STATUS, &compiled);
+
+  if (!compiled) {
+    dumpError(shader);
+    glDeleteShader(shader);
+
+    return 0;
+  }
+
+  return shader;
+}
+
+void loadShaders() {
+  std::string vertexShaderStr =
+      "attribute vec4 vPosition;                   \n"
+      "void main()                                 \n"
+      "{                                           \n"
+      "   gl_Position = vPosition;                 \n"
+      "}                                           \n";
+
+  std::string fragmentShaderStr =
+      "precision mediump float;                            \n"
+      "void main()                                         \n"
+      "{                                                   \n"
+      "  gl_FragColor = vec4( 0.0, 1.0, 0.0, 1.0 );        \n"
+      "}                                                   \n";
+
+  GLuint vertexShader;
+  GLuint fragmentShader;
+
+  vertexShader = createShader(GL_VERTEX_SHADER, vertexShaderStr);
+  fragmentShader = createShader(GL_FRAGMENT_SHADER, fragmentShaderStr);
+
+  shaderProgram = glCreateProgram();
+
+  if (shaderProgram == 0)
+    return;
+
+  glAttachShader(shaderProgram, vertexShader);
+  glAttachShader(shaderProgram, fragmentShader);
+  glLinkProgram(shaderProgram);
+  glUseProgram(shaderProgram);
+
+  GLint linked;
+  glGetProgramiv(shaderProgram, GL_LINK_STATUS, &linked);
+
+  if (!linked) {
+    dumpError(shaderProgram);
+  }
+
+  vPositionLocation = glGetAttribLocation(shaderProgram, "vPosition");
+}
+
+void loadMesh() {
+  glGenVertexArrays(1, &vertexArrayObject);
+  glBindVertexArray(vertexArrayObject);
+  glGenBuffers(1, &meshBuffer);
+  glBindBuffer(GL_ARRAY_BUFFER, meshBuffer);
+  glBufferData(GL_ARRAY_BUFFER, sizeof(vertices), vertices, GL_STATIC_DRAW);
+  glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 3 * sizeof(GLfloat), 0);
+  glEnableVertexAttribArray(0);
 }
 
 void render() {
@@ -36,7 +108,9 @@ void render() {
   glClearColor(255.0f, 0.0f, 0.0f, 1.0f);
   glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
-  glDrawArrays(GL_TRIANGLE_FAN, 0, 4);
+  glUseProgram(shaderProgram);
+  glBindVertexArray(vertexArrayObject);
+  glDrawArrays(GL_TRIANGLES, 0, sizeof(vertices) / sizeof(GLfloat) / 3);
 
   SDL_GL_SwapWindow(window);
 }
@@ -72,10 +146,9 @@ int main(int argc, char *argv[]) {
     std::cout << SDL_GetError() << '\n';
   }
 
-  std::cout << (gl_context == NULL) << '\n';
-
   glEnable(GL_DEPTH_TEST);
-  loadBufferData();
+  loadShaders();
+  loadMesh();
 
   emscripten_set_main_loop(update, 0, 1);
 }

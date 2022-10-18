@@ -1,7 +1,7 @@
 build-and-serve: build serve
 
 build:
-	emcc hello.cpp -o hello.html -s USE_SDL=2 -s USE_SDL_IMAGE=2  -lGLESv2 -lEGL -lm -lX11 -MJ a.o.json
+	emcc hello.cpp -o hello.html -s USE_SDL=2 -s USE_SDL_IMAGE=2  -lGLESv2 -lEGL -lm -lX11 -MJ a.o.json -gsource-map --source-map-base http://localhost:8000/
 
 serve:
 	python3 -m http.server

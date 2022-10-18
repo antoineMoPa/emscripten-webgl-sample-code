@@ -21,3 +21,4 @@ Then visit [http://localhost:8000/hello.html](http://localhost:8000/hello.html)
 # References
 
 https://github.com/emscripten-core/emscripten/tree/main/test/third_party/glbook
+https://learnopengl.com/Getting-started/Hello-Triangle
