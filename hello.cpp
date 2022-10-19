@@ -4,16 +4,18 @@
 #include <iostream>
 #include <string>
 
-static bool quitting = false;
-static SDL_Window *window = NULL;
-static SDL_GLContext gl_context;
 
+// Initialize some global variables for later use.
+// In a production app, you would want to place these in different classes or namespaces.
 GLuint vertexBuffer, vertexArrayObject, vertexPositionAttributeLocation,
     meshBuffer, shaderProgram, timeUniformLocation;
 GLint positionAttribute, uvAttribute;
-int textures[4];
 GLfloat vertices[] = {-0.5f, -0.5f, 0.0f, 0.5f, -0.5f, 0.0f, 0.0f, 0.5f, 0.0f};
+bool quitting = false;
+SDL_Window *window = NULL;
+SDL_GLContext gl_context;
 
+// Utility to dump shader errors
 void dumpError(GLuint object) {
   GLint infoLen = 0;
 
@@ -28,6 +30,7 @@ void dumpError(GLuint object) {
   }
 }
 
+// Utility to compile a shader
 GLuint createShader(GLuint type, std::string code) {
   GLint compiled;
   GLuint shader = glCreateShader(type);
@@ -51,6 +54,7 @@ GLuint createShader(GLuint type, std::string code) {
   return shader;
 }
 
+// Compile and link the fragment and vertex shaders into a shader program.
 void loadShaders() {
   std::string vertexShaderStr = "attribute vec4 vertexPosition;\n"
                                 "varying vec4 position;\n"
@@ -98,6 +102,7 @@ void loadShaders() {
   timeUniformLocation = glGetUniformLocation(shaderProgram, "time");
 }
 
+// Load a triangle into a vertext array object.
 void loadMesh() {
   glGenVertexArrays(1, &vertexArrayObject);
   glBindVertexArray(vertexArrayObject);
@@ -108,41 +113,33 @@ void loadMesh() {
   glEnableVertexAttribArray(0);
 }
 
+// This function is called at every frame.
+// It clears the screen, attaches ther shader program and draws a triangle.
 void render() {
-  SDL_GL_MakeCurrent(window, gl_context);
-
   glClearColor(0.3f, 0.0f, 0.3f, 1.0f);
   glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
   glUseProgram(shaderProgram);
 
+  // Find the current timestamp
   auto timeSinceEpoch = std::chrono::system_clock::now().time_since_epoch();
   int millis =
       std::chrono::duration_cast<std::chrono::milliseconds>(timeSinceEpoch)
           .count();
 
+  // Update the time in the fragment shader, so we can animate the output.
   glUniform1f(timeUniformLocation, millis % 100000 / 1000.0);
+
+  // Use the triangle that we stored earlier in loadMesh
   glBindVertexArray(vertexArrayObject);
   glDrawArrays(GL_TRIANGLES, 0, sizeof(vertices) / sizeof(GLfloat) / 3);
-
-  SDL_GL_SwapWindow(window);
 }
 
 void update() {
-  SDL_Event event;
-  while (SDL_PollEvent(&event)) {
-    if (event.type == SDL_QUIT) {
-      quitting = true;
-    }
-  }
-
   render();
 };
 
 int main(int argc, char *argv[]) {
-  SDL_Renderer *renderer = NULL;
-  SDL_CreateWindowAndRenderer(512, 512, SDL_WINDOW_OPENGL, &window, &renderer);
-
   if (SDL_Init(SDL_INIT_VIDEO | SDL_INIT_EVENTS) != 0) {
     SDL_Log("Failed to initialize SDL: %s", SDL_GetError());
     return 1;
